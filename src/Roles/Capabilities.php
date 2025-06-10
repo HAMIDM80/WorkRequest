@@ -1,8 +1,5 @@
 <?php
-/**
- * Handles custom roles and capabilities for the Work Request plugin.
- * Defines roles on plugin activation and removes them on deactivation.
- */
+// src/Roles/Capabilities.php
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
@@ -11,186 +8,198 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WorkRequest_Roles_Capabilities {
 
     public function __construct() {
-        // Register activation and deactivation hooks
-        register_activation_hook( WORKREQUEST_PLUGIN_DIR . 'workrequest.php', array( $this, 'activate_roles_capabilities' ) );
-        register_deactivation_hook( WORKREQUEST_PLUGIN_DIR . 'workrequest.php', array( $this, 'deactivate_roles_capabilities' ) );
+        // We will register roles and capabilities on plugin activation
+        // and also ensure they are present on every admin page load,
+        // in case they were removed or plugin wasn't activated properly.
+        add_action( 'init', array( $this, 'add_custom_roles_and_capabilities' ) );
     }
 
     /**
-     * Define custom capabilities used by the plugin.
-     * This ensures consistency and centralizes capability definitions.
-     *
-     * @return array
+     * Adds custom roles and capabilities to WordPress.
+     * This method is designed to be called on plugin activation AND on 'init' hook.
      */
-    private function get_custom_capabilities() {
-        return array(
-            // General Work Request Capabilities
-            'read_work_request'          => __( 'Read Work Request', 'workrequest' ),
-            'edit_work_request'          => __( 'Edit Work Request', 'workrequest' ),
-            'publish_work_request'       => __( 'Publish Work Request', 'workrequest' ), // For internal use/admin
-            'delete_work_request'        => __( 'Delete Work Request', 'workrequest' ),
-            'edit_others_work_requests'  => __( 'Edit Others Work Requests', 'workrequest' ),
-            'delete_others_work_requests' => __( 'Delete Others Work Requests', 'workrequest' ),
-            'read_private_work_requests' => __( 'Read Private Work Requests', 'workrequest' ),
-
-            // Task Capabilities
-            'read_task'                  => __( 'Read Task', 'workrequest' ),
-            'edit_task'                  => __( 'Edit Task', 'workrequest' ),
-            'delete_task'                => __( 'Delete Task', 'workrequest' ),
-            'edit_others_tasks'          => __( 'Edit Others Tasks', 'workrequest' ),
-            'delete_others_tasks'        => __( 'Delete Others Tasks', 'workrequest' ),
-
-            // Role-specific Capabilities
-            'manage_repair_requests'     => __( 'Manage Repair Requests', 'workrequest' ), // For Admin, Finance, QC
-            'view_all_tasks'             => __( 'View All Tasks', 'workrequest' ), // For Admin, Finance, QC
-            'view_own_tasks'             => __( 'View Own Tasks', 'workrequest' ), // For Executor
-            'edit_own_tasks'             => __( 'Edit Own Tasks', 'workrequest' ), // For Executor (status, cost, notes)
-            'manage_finance_aspects'     => __( 'Manage Finance Aspects', 'workrequest' ), // For Finance Manager
-            'manage_inventory'           => __( 'Manage Inventory', 'workrequest' ), // For Storekeeper
-            'approve_task_quality'       => __( 'Approve Task Quality', 'workrequest' ), // For QC
-            'manage_marketing_leads'     => __( 'Manage Marketing Leads', 'workrequest' ), // For Marketer (view own clients requests)
-            'submit_repair_request'      => __( 'Submit Repair Request', 'workrequest' ), // For Customer/Frontend user
-        );
-    }
-
-    /**
-     * Define custom roles and assign capabilities to them.
-     */
-    private function get_custom_roles() {
-        return array(
-            'executor' => array(
-                'name'         => __( 'Executor', 'workrequest' ),
-                'capabilities' => array(
-                    'read'                   => true, // Basic read access
-                    'view_own_tasks'         => true,
-                    'edit_own_tasks'         => true,
-                    'submit_repair_request'  => true, // Can also submit requests if needed
-                    'upload_files'           => true, // To upload images for tasks
-                ),
-            ),
-            'finance_manager' => array(
-                'name'         => __( 'Finance Manager', 'workrequest' ),
-                'capabilities' => array(
-                    'read'                       => true,
-                    'manage_repair_requests'     => true,
-                    'view_all_tasks'             => true,
-                    'manage_finance_aspects'     => true,
-                    'edit_work_request'          => true, // To update financial details of requests
-                    'edit_repair_order_item'     => true, // To manage order items
-                    'delete_repair_order_item'   => true,
-                    'read_private_repair_order_items' => true,
-                    'submit_repair_request'      => true, // Can also submit requests
-                ),
-            ),
-            'storekeeper' => array(
-                'name'         => __( 'Storekeeper', 'workrequest' ),
-                'capabilities' => array(
-                    'read'                   => true,
-                    'manage_inventory'       => true,
-                    'view_all_tasks'         => true, // To see what items are needed for tasks
-                    'read_work_request'      => true, // To see items needed for requests
-                    'submit_repair_request'  => true, // Can also submit requests
-                ),
-            ),
-            'quality_control' => array(
-                'name'         => __( 'Quality Control', 'workrequest' ),
-                'capabilities' => array(
-                    'read'                   => true,
-                    'view_all_tasks'         => true,
-                    'approve_task_quality'   => true,
-                    'read_work_request'      => true, // To see related requests
-                    'submit_repair_request'  => true, // Can also submit requests
-                ),
-            ),
-            'marketer' => array(
-                'name'         => __( 'Marketer', 'workrequest' ),
-                'capabilities' => array(
-                    'read'                   => true,
-                    'manage_marketing_leads' => true,
-                    'submit_repair_request'  => true, // Their primary way to create leads
-                    'read_work_request'      => true, // To view requests they submitted
-                ),
-            ),
-            // Default WordPress roles adjustments if needed, e.g., 'customer' might have 'submit_repair_request'
-        );
-    }
-
-    /**
-     * Adds custom roles and capabilities on plugin activation.
-     */
-    public function activate_roles_capabilities() {
-        $this->add_custom_roles_and_capabilities();
-    }
-
-    /**
-     * Removes custom roles and capabilities on plugin deactivation.
-     */
-    public function deactivate_roles_capabilities() {
-        $this->remove_custom_roles_and_capabilities();
-    }
-
-    /**
-     * Helper to add all custom roles and their capabilities.
-     */
-    private function add_custom_roles_and_capabilities() {
-        // Add custom capabilities to Administrator role
-        $admin_role = get_role( 'administrator' );
-        if ( $admin_role ) {
-            foreach ( $this->get_custom_capabilities() as $cap_slug => $cap_name ) {
-                if ( ! $admin_role->has_cap( $cap_slug ) ) {
-                    $admin_role->add_cap( $cap_slug );
-                }
-            }
+    public function add_custom_roles_and_capabilities() {
+        if ( get_option( 'workrequest_custom_roles_added' ) !== 'yes' ) {
+            // Add custom roles only once or if somehow they were removed
+            $this->add_roles();
+            update_option( 'workrequest_custom_roles_added', 'yes' );
         }
+        // Always ensure capabilities are assigned to roles on every init in admin,
+        // especially during development or if roles were manually edited.
+        $this->assign_capabilities_to_roles();
+    }
 
-        // Add custom roles
-        foreach ( $this->get_custom_roles() as $role_slug => $role_data ) {
-            if ( null === get_role( $role_slug ) ) {
-                add_role( $role_slug, $role_data['name'], $role_data['capabilities'] );
-            } else {
-                // If role exists, ensure capabilities are updated
-                $existing_role = get_role( $role_slug );
-                foreach ( $role_data['capabilities'] as $cap => $grant ) {
+
+    /**
+     * Define and add custom roles.
+     * Should only be called on plugin activation.
+     */
+    private function add_roles() {
+        // Define your custom roles here
+        add_role(
+            'repair_technician',
+            __( 'Repair Technician', 'workrequest' ),
+            array(
+                'read' => true, // Basic read access
+            )
+        );
+        add_role(
+            'customer_service',
+            __( 'Customer Service', 'workrequest' ),
+            array(
+                'read' => true, // Basic read access
+            )
+        );
+        // Add more roles as needed
+    }
+
+    /**
+     * Assigns specific capabilities to roles.
+     * This is called on every 'init' hook.
+     */
+    private function assign_capabilities_to_roles() {
+        $roles = $this->get_custom_roles();
+        foreach ( $roles as $role_name => $capabilities ) {
+            $role = get_role( $role_name );
+            if ( $role ) {
+                foreach ( $capabilities as $cap => $grant ) {
                     if ( $grant ) {
-                        $existing_role->add_cap( $cap );
+                        $role->add_cap( $cap );
                     } else {
-                        $existing_role->remove_cap( $cap );
+                        $role->remove_cap( $cap );
                     }
                 }
             }
         }
 
-        // Ensure 'customer' role can submit repair requests (if WooCommerce is active and 'customer' role exists)
-        $customer_role = get_role( 'customer' );
-        if ( $customer_role && ! $customer_role->has_cap( 'submit_repair_request' ) ) {
-            $customer_role->add_cap( 'submit_repair_request' );
+        // Ensure Administrator always has all custom capabilities
+        $admin_role = get_role( 'administrator' );
+        if ( $admin_role ) {
+            $all_custom_caps = $this->get_all_custom_capabilities();
+            foreach ( $all_custom_caps as $cap ) {
+                $admin_role->add_cap( $cap );
+            }
         }
+    }
+
+
+    /**
+     * Defines the custom capabilities for each post type.
+     * These should EXACTLY match the 'capability_type' used in CPT registration.
+     *
+     * @return array All custom capabilities defined by the plugin.
+     */
+    private function get_all_custom_capabilities() {
+        return array(
+            // Repair Request Capabilities
+            'edit_repair_request',
+            'read_repair_request',
+            'delete_repair_request',
+            'edit_repair_requests',
+            'edit_others_repair_requests',
+            'publish_repair_requests',
+            'read_private_repair_requests',
+            'delete_repair_requests',
+            'delete_private_repair_requests',
+            'delete_published_repair_requests',
+            'delete_others_repair_requests',
+            'edit_published_repair_requests',
+            'create_repair_requests',
+            // Repair Order Item Capabilities
+            'edit_repair_order_item',
+            'read_repair_order_item',
+            'delete_repair_order_item',
+            'edit_repair_order_items',
+            'edit_others_repair_order_items',
+            'publish_repair_order_items',
+            'read_private_repair_order_items',
+            'delete_repair_order_items',
+            'delete_private_repair_order_items',
+            'delete_published_repair_order_items',
+            'delete_others_repair_order_items',
+            'edit_published_repair_order_items',
+            'create_repair_order_items',
+            // Task Capabilities
+            'edit_task',
+            'read_task',
+            'delete_task',
+            'edit_tasks',
+            'edit_others_tasks',
+            'publish_tasks',
+            'read_private_tasks',
+            'delete_tasks',
+            'delete_private_tasks',
+            'delete_published_tasks',
+            'delete_others_tasks',
+            'edit_published_tasks',
+            'create_tasks',
+            // Capabilities for accessing specific admin pages
+            'manage_repair_requests', // Used for Repair Order Preparation Page and Tasks By Request Page
+        );
     }
 
     /**
-     * Helper to remove all custom roles and their capabilities.
+     * Defines the capabilities for each custom role.
+     *
+     * @return array An array of custom roles and their capabilities.
      */
-    private function remove_custom_roles_and_capabilities() {
-        // Remove custom capabilities from Administrator role
-        $admin_role = get_role( 'administrator' );
-        if ( $admin_role ) {
-            foreach ( $this->get_custom_capabilities() as $cap_slug => $cap_name ) {
-                $admin_role->remove_cap( $cap_slug );
+    private function get_custom_roles() {
+        return array(
+            'administrator' => array(
+                // Administrator should have all capabilities by default, handled in assign_capabilities_to_roles()
+            ),
+            'repair_technician' => array(
+                'read' => true,
+                'edit_tasks' => true,
+                'edit_published_tasks' => true,
+                'read_task' => true,
+                'read_private_tasks' => true, // If technicians can see private tasks
+                'delete_tasks' => true, // If technicians can delete their own tasks
+                'edit_repair_requests' => true, // Can edit repair requests assigned to them
+                'read_repair_request' => true,
+                'read_private_repair_requests' => true, // Can read private repair requests
+                'edit_repair_order_items' => true,
+                'read_repair_order_item' => true,
+                'manage_repair_requests' => true, // If they need access to the admin pages
+            ),
+            'customer_service' => array(
+                'read' => true,
+                'create_repair_requests' => true,
+                'edit_repair_requests' => true,
+                'edit_published_repair_requests' => true,
+                'read_repair_request' => true,
+                'read_private_repair_requests' => true,
+                'delete_repair_requests' => true, // If they can delete requests
+                'manage_repair_requests' => true, // If they need access to the admin pages
+            ),
+        );
+    }
+
+    /**
+     * Optionally remove custom roles and capabilities on plugin deactivation.
+     * Implement this method if you want to clean up roles/capabilities when plugin is deactivated.
+     * This method would be called from the `workrequest_deactivate_plugin` function.
+     */
+    public function remove_custom_roles_and_caps() {
+        // Get all custom capabilities
+        $all_custom_caps = $this->get_all_custom_capabilities();
+
+        // Remove capabilities from roles
+        $roles_to_clean = array( 'administrator', 'repair_technician', 'customer_service' ); // Add any other custom roles
+        foreach ( $roles_to_clean as $role_name ) {
+            $role = get_role( $role_name );
+            if ( $role ) {
+                foreach ( $all_custom_caps as $cap ) {
+                    $role->remove_cap( $cap );
+                }
             }
         }
 
-        // Remove custom roles
-        foreach ( $this->get_custom_roles() as $role_slug => $role_data ) {
-            remove_role( $role_slug );
-        }
+        // Remove custom roles themselves
+        remove_role( 'repair_technician' );
+        remove_role( 'customer_service' );
 
-        // Remove 'submit_repair_request' cap from 'customer' role
-        $customer_role = get_role( 'customer' );
-        if ( $customer_role ) {
-            $customer_role->remove_cap( 'submit_repair_request' );
-        }
+        // Clean up the option that prevents re-adding roles unnecessarily
+        delete_option( 'workrequest_custom_roles_added' );
     }
 }
-
-// Instantiate the class to register hooks
-new WorkRequest_Roles_Capabilities();

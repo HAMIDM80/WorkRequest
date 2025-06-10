@@ -1,8 +1,5 @@
 <?php
-/**
- * Admin functions for Repair Order Item CPT.
- * This class handles metaboxes and saving custom fields for 'repair_order_item'.
- */
+// src/Admin/RepairOrderItemMetaboxes.php
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
@@ -10,204 +7,163 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WorkRequest_Admin_RepairOrderItemMetaboxes {
 
-    /**
-     * Constructor.
-     * Registers all necessary hooks for metaboxes and saving.
-     */
     public function __construct() {
-        add_action( 'add_meta_boxes', array( $this, 'add_metaboxes' ) );
-        add_action( 'save_post_repair_order_item', array( $this, 'save_meta' ), 10, 2 );
+        add_action( 'add_meta_boxes', array( $this, 'add_repair_order_item_metaboxes' ) );
+        add_action( 'save_post_repair_order_item', array( $this, 'save_repair_order_item_metabox_data' ) );
+
+        // --- START: Custom Columns for Repair Order Item ---
+        add_filter( 'manage_edit-repair_order_item_columns', array( $this, 'add_custom_columns' ) );
+        add_action( 'manage_repair_order_item_posts_custom_column', array( $this, 'render_custom_columns' ), 10, 2 );
+        // --- END: Custom Columns for Repair Order Item ---
     }
 
-    /**
-     * Add custom metaboxes for 'repair_order_item' CPT.
-     */
-    public function add_metaboxes() {
+    public function add_repair_order_item_metaboxes() {
         add_meta_box(
             'workrequest_repair_order_item_details',
-            __( 'Item Details', 'workrequest' ),
-            array( $this, 'render_details_metabox' ),
+            __( 'Repair Order Item Details', 'workrequest' ),
+            array( $this, 'render_repair_order_item_details_metabox' ),
             'repair_order_item',
             'normal',
             'high'
         );
-        add_meta_box(
-            'workrequest_repair_order_item_linked_tasks',
-            __( 'Linked Tasks', 'workrequest' ),
-            array( $this, 'render_linked_tasks_metabox' ),
-            'repair_order_item',
-            'normal',
-            'high'
-        );
+        // Add more metaboxes as needed for RepairOrderItem
     }
 
-    /**
-     * Callback for Item Details Metabox.
-     * @param WP_Post $post The post object.
-     */
-    public function render_details_metabox( $post ) {
-        wp_nonce_field( 'workrequest_save_repair_order_item_details', 'workrequest_repair_order_item_details_nonce' );
+    public function render_repair_order_item_details_metabox( $post ) {
+        wp_nonce_field( 'repair_order_item_details_nonce', 'repair_order_item_details_nonce_field' );
 
-        $repair_request_id = get_post_meta( $post->ID, '_workrequest_repair_request_id', true );
-        $item_cost         = get_post_meta( $post->ID, '_workrequest_repair_order_item_cost', true );
-        $wc_product_id     = get_post_meta( $post->ID, '_workrequest_woocommerce_product_id', true );
-        $wc_order_id       = get_post_meta( $post->ID, '_workrequest_woocommerce_order_id', true );
-        $item_notes        = get_post_meta( $post->ID, '_workrequest_repair_order_item_notes', true );
+        $parent_request_id = get_post_meta( $post->ID, '_workrequest_parent_request_id', true );
+        $item_status = get_post_meta( $post->ID, '_workrequest_item_status', true );
+        $estimated_cost = get_post_meta( $post->ID, '_workrequest_estimated_cost', true );
+        $item_description = get_post_meta( $post->ID, '_workrequest_item_description', true );
 
-        // Display the original Repair Request linked
-        if ( $repair_request_id && get_post_type( $repair_request_id ) === 'repair_request' ) {
-            $request_title = get_the_title( $repair_request_id );
-            $edit_link = get_edit_post_link( $repair_request_id );
-            echo '<p><strong>' . esc_html__( 'Linked Repair Request:', 'workrequest' ) . '</strong> <a href="' . esc_url( $edit_link ) . '">#' . absint( $repair_request_id ) . ' - ' . esc_html( $request_title ) . '</a></p>';
-        } else {
-            echo '<p><strong>' . esc_html__( 'Linked Repair Request:', 'workrequest' ) . '</strong> ' . esc_html__( 'None or invalid.', 'workrequest' ) . '</p>';
-        }
-
-        // Input for item cost
-        echo '<p>';
-        echo '<label for="workrequest_item_cost">' . esc_html__( 'Item Cost:', 'workrequest' ) . '</label>';
-        echo '<input type="number" step="0.01" min="0" id="workrequest_item_cost" name="workrequest_item_cost" value="' . esc_attr( $item_cost ) . '" class="regular-text" />';
-        echo '</p>';
-
-        // Dropdown for linking to WooCommerce product (if WooCommerce is active)
-        if ( class_exists( 'WooCommerce' ) ) {
-            echo '<p>';
-            echo '<label for="workrequest_wc_product_id">' . esc_html__( 'Link to WooCommerce Product:', 'workrequest' ) . '</label>';
-            echo '<input type="number" id="workrequest_wc_product_id" name="workrequest_wc_product_id" value="' . esc_attr( $wc_product_id ) . '" placeholder="' . esc_attr__( 'Enter Product ID', 'workrequest' ) . '" class="regular-text" />';
-            echo '<p class="description">' . esc_html__( 'Enter the ID of a WooCommerce product if this repair item corresponds to a specific product/service.', 'workrequest' ) . '</p>';
-            if ( $wc_product_id ) {
-                $product = wc_get_product( $wc_product_id );
-                if ( $product ) {
-                    echo '<p><strong>' . esc_html__( 'Current Product:', 'workrequest' ) . '</strong> <a href="' . esc_url( get_edit_post_link( $wc_product_id ) ) . '">' . esc_html( $product->get_name() ) . '</a> (ID: ' . absint( $wc_product_id ) . ')</p>';
-                }
-            }
-            echo '</p>';
-
-            // Display associated WooCommerce Order ID if available
-            if ( $wc_order_id ) {
-                $order = wc_get_order( $wc_order_id );
-                if ( $order ) {
-                    echo '<p><strong>' . esc_html__( 'Linked WooCommerce Order:', 'workrequest' ) . '</strong> <a href="' . esc_url( $order->get_edit_order_url() ) . '">#' . absint( $wc_order_id ) . '</a></p>';
-                }
-            }
-        }
-
-        // Textarea for notes
-        echo '<p>';
-        echo '<label for="workrequest_item_notes"><strong>' . esc_html__( 'Notes:', 'workrequest' ) . '</strong></label>';
-        echo '<textarea id="workrequest_item_notes" name="workrequest_item_notes" rows="4" class="large-text">' . esc_textarea( $item_notes ) . '</textarea>';
-        echo '</p>';
-
-        // Hidden field to pass repair_request_id if adding from request page
-        if (isset($_GET['workrequest_request_id'])) {
-            echo '<input type="hidden" name="workrequest_repair_request_id_from_url" value="' . absint($_GET['workrequest_request_id']) . '" />';
-        }
-    }
-
-    /**
-     * Callback for Linked Tasks Metabox.
-     * @param WP_Post $post The post object.
-     */
-    public function render_linked_tasks_metabox( $post ) {
-        $args = array(
-            'post_type'      => 'task',
+        // Fetch Repair Requests for dropdown
+        $repair_requests = get_posts( array(
+            'post_type'      => 'repair_request',
             'posts_per_page' => -1,
-            'orderby'        => 'date',
+            'orderby'        => 'title',
             'order'          => 'ASC',
-            'meta_query'     => array(
-                array(
-                    'key'     => '_workrequest_task_linked_item_id',
-                    'value'   => $post->ID,
-                    'compare' => '=',
-                ),
-            ),
-        );
-        $tasks = get_posts( $args );
-
-        if ( $tasks ) {
-            echo '<table class="wp-list-table widefat fixed striped">';
-            echo '<thead><tr><th>' . esc_html__( 'Task Title', 'workrequest' ) . '</th><th>' . esc_html__( 'Status', 'workrequest' ) . '</th><th>' . esc_html__( 'Cost', 'workrequest' ) . '</th><th>' . esc_html__( 'Assigned To', 'workrequest' ) . '</th><th>' . esc_html__( 'Actions', 'workrequest' ) . '</th></tr></thead>';
-            echo '<tbody>';
-            foreach ( $tasks as $task ) {
-                $task_status = get_post_meta( $task->ID, '_workrequest_task_status', true );
-                $task_cost = get_post_meta( $task->ID, '_workrequest_task_cost', true );
-                $assigned_to_id = get_post_meta( $task->ID, '_workrequest_task_assigned_to', true );
-                $assigned_to_user = $assigned_to_id ? get_userdata( $assigned_to_id ) : null;
-                $assigned_to_name = $assigned_to_user ? $assigned_to_user->display_name : esc_html__( 'Unassigned', 'workrequest' );
-
-                // Use the static helper from WorkRequest_CPT_Task if available
-                $status_label = class_exists('WorkRequest_CPT_Task') ? WorkRequest_CPT_Task::get_task_status_label($task_status) : ucfirst(str_replace('_', ' ', $task_status));
-                $cost_display = function_exists('wc_price') ? wc_price(floatval($task_cost)) : '$' . number_format(floatval($task_cost), 2);
-
-                echo '<tr>';
-                echo '<td><a href="' . esc_url( get_edit_post_link( $task->ID ) ) . '">' . esc_html( $task->post_title ) . '</a></td>';
-                echo '<td>' . esc_html( $status_label ) . '</td>';
-                echo '<td>' . esc_html( $cost_display ) . '</td>';
-                echo '<td>' . esc_html( $assigned_to_name ) . '</td>';
-                echo '<td><a href="' . esc_url( get_edit_post_link( $task->ID ) ) . '" class="button button-small">' . esc_html__( 'Edit Task', 'workrequest' ) . '</a></td>';
-                echo '</tr>';
-            }
-            echo '</tbody>';
-            echo '</table>';
-        } else {
-            echo '<p>' . esc_html__( 'No tasks linked to this repair item yet.', 'workrequest' ) . '</p>';
-        }
-        echo '<p><a href="' . esc_url( admin_url( 'post-new.php?post_type=task&workrequest_item_id=' . $post->ID ) ) . '" class="button button-primary">' . esc_html__( 'Add New Task for this Item', 'workrequest' ) . '</a></p>';
+            'fields'         => 'ids', // Get only IDs for performance
+        ) );
+        ?>
+        <table class="form-table">
+            <tbody>
+                <tr>
+                    <th><label for="workrequest_parent_request_id"><?php _e( 'Parent Repair Request', 'workrequest' ); ?></label></th>
+                    <td>
+                        <select name="workrequest_parent_request_id" id="workrequest_parent_request_id">
+                            <option value="0"><?php _e( 'None (Standalone)', 'workrequest' ); ?></option>
+                            <?php
+                            foreach ( $repair_requests as $request_id ) {
+                                $request_title = get_the_title( $request_id );
+                                echo '<option value="' . esc_attr( $request_id ) . '" ' . selected( $parent_request_id, $request_id, false ) . '>' . esc_html( $request_title ) . ' (ID: ' . esc_html( $request_id ) . ')</option>';
+                            }
+                            ?>
+                        </select>
+                        <p class="description"><?php _e( 'Link this item to a specific Repair Request.', 'workrequest' ); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="workrequest_item_status"><?php _e( 'Item Status', 'workrequest' ); ?></label></th>
+                    <td>
+                        <select name="workrequest_item_status" id="workrequest_item_status">
+                            <option value="pending" <?php selected( $item_status, 'pending' ); ?>><?php _e( 'Pending', 'workrequest' ); ?></option>
+                            <option value="in_progress" <?php selected( $item_status, 'in_progress' ); ?>><?php _e( 'In Progress', 'workrequest' ); ?></option>
+                            <option value="completed" <?php selected( $item_status, 'completed' ); ?>><?php _e( 'Completed', 'workrequest' ); ?></option>
+                            <option value="needs_parts" <?php selected( $item_status, 'needs_parts' ); ?>><?php _e( 'Needs Parts', 'workrequest' ); ?></option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="workrequest_estimated_cost"><?php _e( 'Estimated Cost', 'workrequest' ); ?></label></th>
+                    <td><input type="number" step="0.01" id="workrequest_estimated_cost" name="workrequest_estimated_cost" value="<?php echo esc_attr( $estimated_cost ); ?>" class="regular-text" min="0" /></td>
+                </tr>
+                 <tr>
+                    <th><label for="workrequest_item_description"><?php _e( 'Item Description', 'workrequest' ); ?></label></th>
+                    <td><textarea id="workrequest_item_description" name="workrequest_item_description" rows="3" class="large-text"><?php echo esc_textarea( $item_description ); ?></textarea></td>
+                </tr>
+            </tbody>
+        </table>
+        <?php
     }
 
-    /**
-     * Save custom fields for 'repair_order_item' CPT.
-     * @param int $post_id The post ID.
-     * @param WP_Post $post The post object.
-     * @return int|void
-     */
-    public function save_meta( $post_id, $post ) {
-        // Verify nonce
-        if ( ! isset( $_POST['workrequest_repair_order_item_details_nonce'] ) || ! wp_verify_nonce( $_POST['workrequest_repair_order_item_details_nonce'], 'workrequest_save_repair_order_item_details' ) ) {
+    public function save_repair_order_item_metabox_data( $post_id ) {
+        if ( ! isset( $_POST['repair_order_item_details_nonce_field'] ) ) {
             return $post_id;
         }
-
-        // Check autosave and revisions
+        if ( ! wp_verify_nonce( $_POST['repair_order_item_details_nonce_field'], 'repair_order_item_details_nonce' ) ) {
+            return $post_id;
+        }
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
             return $post_id;
         }
-        if ( wp_is_post_revision( $post_id ) ) {
-            return $post_id;
-        }
-
-        // Check user capabilities
         if ( ! current_user_can( 'edit_repair_order_item', $post_id ) ) {
             return $post_id;
         }
 
-        // Save Item Cost
-        if ( isset( $_POST['workrequest_item_cost'] ) ) {
-            update_post_meta( $post_id, '_workrequest_repair_order_item_cost', floatval( $_POST['workrequest_item_cost'] ) );
+        if ( isset( $_POST['workrequest_parent_request_id'] ) ) {
+            update_post_meta( $post_id, '_workrequest_parent_request_id', intval( $_POST['workrequest_parent_request_id'] ) );
         }
-
-        // Save WooCommerce Product ID
-        if ( isset( $_POST['workrequest_wc_product_id'] ) ) {
-            $product_id = absint( $_POST['workrequest_wc_product_id'] );
-            if ( $product_id > 0 && class_exists( 'WooCommerce' ) && wc_get_product( $product_id ) ) {
-                update_post_meta( $post_id, '_workrequest_woocommerce_product_id', $product_id );
-            } else {
-                delete_post_meta( $post_id, '_workrequest_woocommerce_product_id' );
-            }
+        if ( isset( $_POST['workrequest_item_status'] ) ) {
+            update_post_meta( $post_id, '_workrequest_item_status', sanitize_text_field( $_POST['workrequest_item_status'] ) );
         }
-
-        // Save Item Notes
-        if ( isset( $_POST['workrequest_item_notes'] ) ) {
-            update_post_meta( $post_id, '_workrequest_repair_order_item_notes', sanitize_textarea_field( $_POST['workrequest_item_notes'] ) );
+        if ( isset( $_POST['workrequest_estimated_cost'] ) ) {
+            update_post_meta( $post_id, '_workrequest_estimated_cost', floatval( $_POST['workrequest_estimated_cost'] ) );
         }
+        if ( isset( $_POST['workrequest_item_description'] ) ) {
+            update_post_meta( $post_id, '_workrequest_item_description', sanitize_textarea_field( $_POST['workrequest_item_description'] ) );
+        }
+    }
 
-        // Handle linking to a Repair Request if coming from a URL parameter
-        // This is typically only set on initial creation from the Request page.
-        if ( isset( $_POST['workrequest_repair_request_id_from_url'] ) && ! empty( $_POST['workrequest_repair_request_id_from_url'] ) ) {
-            $request_id = absint( $_POST['workrequest_repair_request_id_from_url'] );
-            // Only update if current meta is empty or the new request_id is valid
-            if ( empty( get_post_meta( $post_id, '_workrequest_repair_request_id', true ) ) || get_post_type( $request_id ) === 'repair_request' ) {
-                update_post_meta( $post_id, '_workrequest_repair_request_id', $request_id );
-            }
+    /**
+     * Adds custom columns to the Repair Order Item list table.
+     * Note: For custom post types that are submenus, the filter hook usually needs 'edit-CPT_SLUG'
+     *
+     * @param array $columns Existing columns.
+     * @return array Modified columns.
+     */
+    public function add_custom_columns( $columns ) {
+        // Remove 'date' if you want to replace it or move it
+        unset( $columns['date'] );
+        $new_columns = array(
+            'parent_request' => __( 'Parent Request', 'workrequest' ),
+            'item_status'    => __( 'Status', 'workrequest' ),
+            'estimated_cost' => __( 'Est. Cost', 'workrequest' ),
+            'date'           => __( 'Date', 'workrequest' ), // Re-add date at the end
+        );
+        return array_merge( $columns, $new_columns );
+    }
+
+    /**
+     * Renders content for custom columns in the Repair Order Item list table.
+     *
+     * @param string $column_name The name of the column to display.
+     * @param int    $post_id     The ID of the current post.
+     */
+    public function render_custom_columns( $column_name, $post_id ) {
+        switch ( $column_name ) {
+            case 'parent_request':
+                $parent_request_id = get_post_meta( $post_id, '_workrequest_parent_request_id', true );
+                if ( $parent_request_id ) {
+                    $parent_request_title = get_the_title( $parent_request_id );
+                    $edit_link = get_edit_post_link( $parent_request_id );
+                    if ( $parent_request_title && $edit_link ) {
+                        echo '<a href="' . esc_url( $edit_link ) . '">' . esc_html( $parent_request_title ) . '</a>';
+                    } else {
+                        echo __( 'N/A', 'workrequest' );
+                    }
+                } else {
+                    echo __( 'None', 'workrequest' );
+                }
+                break;
+            case 'item_status':
+                $status = get_post_meta( $post_id, '_workrequest_item_status', true );
+                echo esc_html( ucfirst( str_replace( '_', ' ', $status ) ) );
+                break;
+            case 'estimated_cost':
+                $cost = get_post_meta( $post_id, '_workrequest_estimated_cost', true );
+                echo $cost ? esc_html( number_format( $cost, 2 ) ) : __( 'N/A', 'workrequest' );
+                break;
         }
     }
 }

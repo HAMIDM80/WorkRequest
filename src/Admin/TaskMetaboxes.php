@@ -1,8 +1,5 @@
 <?php
-/**
- * Admin functions for Task CPT.
- * This class handles metaboxes and saving custom fields for 'task'.
- */
+// src/Admin/TaskMetaboxes.php
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
@@ -10,267 +7,183 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class WorkRequest_Admin_TaskMetaboxes {
 
-    /**
-     * Constructor.
-     * Registers all necessary hooks for metaboxes and saving.
-     */
     public function __construct() {
-        add_action( 'add_meta_boxes', array( $this, 'add_metaboxes' ) );
-        add_action( 'save_post_task', array( $this, 'save_meta' ), 10, 2 );
+        add_action( 'add_meta_boxes', array( $this, 'add_task_metaboxes' ) );
+        add_action( 'save_post_task', array( $this, 'save_task_metabox_data' ) );
+
+        // --- START: Custom Columns for Task ---
+        add_filter( 'manage_task_posts_columns', array( $this, 'add_custom_columns' ) );
+        add_action( 'manage_task_posts_custom_column', array( $this, 'render_custom_columns' ), 10, 2 );
+        // --- END: Custom Columns for Task ---
     }
 
-    /**
-     * Add custom metaboxes for 'task' CPT.
-     */
-    public function add_metaboxes() {
+    public function add_task_metaboxes() {
         add_meta_box(
             'workrequest_task_details',
             __( 'Task Details', 'workrequest' ),
-            array( $this, 'render_details_metabox' ),
+            array( $this, 'render_task_details_metabox' ),
             'task',
             'normal',
             'high'
         );
-        add_meta_box(
-            'workrequest_task_status',
-            __( 'Task Status & Approvals', 'workrequest' ),
-            array( $this, 'render_status_metabox' ),
-            'task',
-            'side',
-            'high'
-        );
+        // Add more metaboxes as needed for Task
     }
 
-    /**
-     * Callback for Task Details Metabox.
-     * @param WP_Post $post The post object.
-     */
-    public function render_details_metabox( $post ) {
-        wp_nonce_field( 'workrequest_save_task_details', 'workrequest_task_details_nonce' );
+    public function render_task_details_metabox( $post ) {
+        wp_nonce_field( 'task_details_nonce', 'task_details_nonce_field' );
 
-        $original_request_id = get_post_meta( $post->ID, '_workrequest_task_original_request_id', true );
-        $linked_item_id      = get_post_meta( $post->ID, '_workrequest_task_linked_item_id', true );
-        $assigned_to_id      = get_post_meta( $post->ID, '_workrequest_task_assigned_to', true );
-        $task_cost           = get_post_meta( $post->ID, '_workrequest_task_cost', true );
-        $task_due_date       = get_post_meta( $post->ID, '_workrequest_task_due_date', true );
-        $task_priority       = get_post_meta( $post->ID, '_workrequest_task_priority', true );
+        $task_status = get_post_meta( $post->ID, '_workrequest_task_status', true );
+        $assigned_technician_id = get_post_meta( $post->ID, '_workrequest_assigned_technician_id', true );
+        $due_date = get_post_meta( $post->ID, '_workrequest_due_date', true );
+        $related_request_id = get_post_meta( $post->ID, '_workrequest_related_request_id', true );
 
-        // Display original Repair Request link
-        if ( $original_request_id && get_post_type( $original_request_id ) === 'repair_request' ) {
-            $request_title = get_the_title( $original_request_id );
-            $edit_link = get_edit_post_link( $original_request_id );
-            echo '<p><strong>' . esc_html__( 'Linked Repair Request:', 'workrequest' ) . '</strong> <a href="' . esc_url( $edit_link ) . '">#' . absint( $original_request_id ) . ' - ' . esc_html( $request_title ) . '</a></p>';
-        } else {
-            echo '<p><strong>' . esc_html__( 'Linked Repair Request:', 'workrequest' ) . '</strong> ' . esc_html__( 'None or invalid.', 'workrequest' ) . '</p>';
-        }
+        // Get available technicians (e.g., users with 'repair_technician' role)
+        $technicians = get_users( array( 'role' => 'repair_technician' ) );
 
-        // Display linked Repair Order Item
-        if ( $linked_item_id && get_post_type( $linked_item_id ) === 'repair_order_item' ) {
-            $item_title = get_the_title( $linked_item_id );
-            $edit_link = get_edit_post_link( $linked_item_id );
-            echo '<p><strong>' . esc_html__( 'Linked Repair Item:', 'workrequest' ) . '</strong> <a href="' . esc_url( $edit_link ) . '">#' . absint( $linked_item_id ) . ' - ' . esc_html( $item_title ) . '</a></p>';
-        } else {
-            echo '<p><strong>' . esc_html__( 'Linked Repair Item:', 'workrequest' ) . '</strong> ' . esc_html__( 'None or invalid.', 'workrequest' ) . '</p>';
-        }
-
-        // Assign Task To
-        echo '<p>';
-        echo '<label for="workrequest_task_assigned_to"><strong>' . esc_html__( 'Assigned To:', 'workrequest' ) . '</strong></label>';
-        wp_dropdown_users( array(
-            'name'             => 'workrequest_task_assigned_to',
-            'id'               => 'workrequest_task_assigned_to',
-            'selected'         => $assigned_to_id,
-            'show_option_none' => esc_html__( '— Select User —', 'workrequest' ),
-            'who'              => 'authors', // Or 'all' or specific roles
-            'class'            => 'widefat',
+        // Fetch Repair Requests for dropdown
+        $repair_requests = get_posts( array(
+            'post_type'      => 'repair_request',
+            'posts_per_page' => -1,
+            'orderby'        => 'title',
+            'order'          => 'ASC',
+            'fields'         => 'ids', // Get only IDs for performance
         ) );
-        echo '</p>';
-
-        // Task Cost
-        echo '<p>';
-        echo '<label for="workrequest_task_cost">' . esc_html__( 'Task Cost:', 'workrequest' ) . '</label>';
-        echo '<input type="number" step="0.01" min="0" id="workrequest_task_cost" name="workrequest_task_cost" value="' . esc_attr( $task_cost ) . '" class="regular-text" />';
-        echo '</p>';
-
-        // Due Date
-        echo '<p>';
-        echo '<label for="workrequest_task_due_date"><strong>' . esc_html__( 'Due Date:', 'workrequest' ) . '</strong></label>';
-        echo '<input type="date" id="workrequest_task_due_date" name="workrequest_task_due_date" value="' . esc_attr( $task_due_date ) . '" class="regular-text" />';
-        echo '</p>';
-
-        // Priority
-        $priorities = array(
-            'low'    => __( 'Low', 'workrequest' ),
-            'medium' => __( 'Medium', 'workrequest' ),
-            'high'   => __( 'High', 'workrequest' ),
-            'urgent' => __( 'Urgent', 'workrequest' ),
-        );
-        echo '<p>';
-        echo '<label for="workrequest_task_priority">' . esc_html__( 'Priority:', 'workrequest' ) . '</label>';
-        echo '<select name="workrequest_task_priority" id="workrequest_task_priority" class="postbox">';
-        foreach ( $priorities as $slug => $label ) {
-            echo '<option value="' . esc_attr( $slug ) . '" ' . selected( $task_priority, $slug, false ) . '>' . esc_html( $label ) . '</option>';
-        }
-        echo '</select>';
-        echo '</p>';
-
-        // Hidden fields to pass linked IDs if adding from another CPT page
-        if (isset($_GET['workrequest_request_id'])) {
-            echo '<input type="hidden" name="workrequest_task_original_request_id_from_url" value="' . absint($_GET['workrequest_request_id']) . '" />';
-        }
-        if (isset($_GET['workrequest_item_id'])) {
-            echo '<input type="hidden" name="workrequest_task_linked_item_id_from_url" value="' . absint($_GET['workrequest_item_id']) . '" />';
-        }
+        ?>
+        <table class="form-table">
+            <tbody>
+                <tr>
+                    <th><label for="workrequest_task_status"><?php _e( 'Task Status', 'workrequest' ); ?></label></th>
+                    <td>
+                        <select name="workrequest_task_status" id="workrequest_task_status">
+                            <option value="pending" <?php selected( $task_status, 'pending' ); ?>><?php _e( 'Pending', 'workrequest' ); ?></option>
+                            <option value="in_progress" <?php selected( $task_status, 'in_progress' ); ?>><?php _e( 'In Progress', 'workrequest' ); ?></option>
+                            <option value="completed" <?php selected( $task_status, 'completed' ); ?>><?php _e( 'Completed', 'workrequest' ); ?></option>
+                            <option value="on_hold" <?php selected( $task_status, 'on_hold' ); ?>><?php _e( 'On Hold', 'workrequest' ); ?></option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="workrequest_assigned_technician_id"><?php _e( 'Assigned Technician', 'workrequest' ); ?></label></th>
+                    <td>
+                        <select name="workrequest_assigned_technician_id" id="workrequest_assigned_technician_id">
+                            <option value="0"><?php _e( 'Unassigned', 'workrequest' ); ?></option>
+                            <?php foreach ( $technicians as $technician ) : ?>
+                                <option value="<?php echo esc_attr( $technician->ID ); ?>" <?php selected( $assigned_technician_id, $technician->ID ); ?>>
+                                    <?php echo esc_html( $technician->display_name ); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="workrequest_due_date"><?php _e( 'Due Date', 'workrequest' ); ?></label></th>
+                    <td><input type="date" id="workrequest_due_date" name="workrequest_due_date" value="<?php echo esc_attr( $due_date ); ?>" class="regular-text" /></td>
+                </tr>
+                <tr>
+                    <th><label for="workrequest_related_request_id"><?php _e( 'Related Repair Request', 'workrequest' ); ?></label></th>
+                    <td>
+                        <select name="workrequest_related_request_id" id="workrequest_related_request_id">
+                            <option value="0"><?php _e( 'None (Standalone)', 'workrequest' ); ?></option>
+                            <?php
+                            foreach ( $repair_requests as $request_id ) {
+                                $request_title = get_the_title( $request_id );
+                                echo '<option value="' . esc_attr( $request_id ) . '" ' . selected( $related_request_id, $request_id, false ) . '>' . esc_html( $request_title ) . ' (ID: ' . esc_html( $request_id ) . ')</option>';
+                            }
+                            ?>
+                        </select>
+                        <p class="description"><?php _e( 'Link this task to a specific Repair Request.', 'workrequest' ); ?></p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <?php
     }
 
-    /**
-     * Callback for Task Status & Approvals Metabox.
-     * @param WP_Post $post The post object.
-     */
-    public function render_status_metabox( $post ) {
-        wp_nonce_field( 'workrequest_save_task_status', 'workrequest_task_status_nonce' );
-
-        $current_status = get_post_meta( $post->ID, '_workrequest_task_status', true );
-        if ( empty( $current_status ) ) {
-            $current_status = 'pending';
-        }
-
-        $statuses = array(
-            'pending'   => __( 'Pending', 'workrequest' ),
-            'assigned'  => __( 'Assigned', 'workrequest' ),
-            'in_progress' => __( 'In Progress', 'workrequest' ),
-            'completed' => __( 'Completed', 'workrequest' ),
-            'on_hold'   => __( 'On Hold', 'workrequest' ),
-            'cancelled' => __( 'Cancelled', 'workrequest' ),
-            'needs_review' => __( 'Needs Review', 'workrequest' ),
-        );
-
-        echo '<p>';
-        echo '<label for="workrequest_task_status">' . esc_html__( 'Current Status:', 'workrequest' ) . '</label>';
-        echo '<select name="workrequest_task_status" id="workrequest_task_status" class="postbox">';
-        foreach ( $statuses as $slug => $label ) {
-            echo '<option value="' . esc_attr( $slug ) . '" ' . selected( $current_status, $slug, false ) . '>' . esc_html( $label ) . '</option>';
-        }
-        echo '</select>';
-        echo '</p>';
-
-        // Approval fields
-        $owner_approved    = get_post_meta( $post->ID, '_workrequest_task_owner_approved', true );
-        $storage_approved  = get_post_meta( $post->ID, '_workrequest_task_storage_approved', true );
-        $operator_approved = get_post_meta( $post->ID, '_workrequest_task_operator_approved', true );
-        $qc_approved       = get_post_meta( $post->ID, '_workrequest_task_qc_approved', true );
-
-        echo '<h4>' . esc_html__( 'Approvals:', 'workrequest' ) . '</h4>';
-        echo '<p>';
-        echo '<label for="workrequest_task_owner_approved">';
-        echo '<input type="checkbox" id="workrequest_task_owner_approved" name="workrequest_task_owner_approved" value="1" ' . checked( $owner_approved, 1, false ) . ' />';
-        echo ' ' . esc_html__( 'Owner Approved', 'workrequest' ) . '</label>';
-        echo '</p>';
-
-        echo '<p>';
-        echo '<label for="workrequest_task_storage_approved">';
-        echo '<input type="checkbox" id="workrequest_task_storage_approved" name="workrequest_task_storage_approved" value="1" ' . checked( $storage_approved, 1, false ) . ' />';
-        echo ' ' . esc_html__( 'Storage Approved', 'workrequest' ) . '</label>';
-        echo '</p>';
-
-        echo '<p>';
-        echo '<label for="workrequest_task_operator_approved">';
-        echo '<input type="checkbox" id="workrequest_task_operator_approved" name="workrequest_task_operator_approved" value="1" ' . checked( $operator_approved, 1, false ) . ' />';
-        echo ' ' . esc_html__( 'Operator Approved', 'workrequest' ) . '</label>';
-        echo '</p>';
-
-        echo '<p>';
-        echo '<label for="workrequest_task_qc_approved">';
-        echo '<input type="checkbox" id="workrequest_task_qc_approved" name="workrequest_task_qc_approved" value="1" ' . checked( $qc_approved, 1, false ) . ' />';
-        echo ' ' . esc_html__( 'QC Approved', 'workrequest' ) . '</label>';
-        echo '</p>';
-    }
-
-    /**
-     * Save custom fields for 'task' CPT.
-     * @param int $post_id The post ID.
-     * @param WP_Post $post The post object.
-     * @return int|void
-     */
-    public function save_meta( $post_id, $post ) {
-        // Verify nonces
-        if ( ! isset( $_POST['workrequest_task_details_nonce'] ) || ! wp_verify_nonce( $_POST['workrequest_task_details_nonce'], 'workrequest_save_task_details' ) ) {
+    public function save_task_metabox_data( $post_id ) {
+        if ( ! isset( $_POST['task_details_nonce_field'] ) ) {
             return $post_id;
         }
-        if ( ! isset( $_POST['workrequest_task_status_nonce'] ) || ! wp_verify_nonce( $_POST['workrequest_task_status_nonce'], 'workrequest_save_task_status' ) ) {
+        if ( ! wp_verify_nonce( $_POST['task_details_nonce_field'], 'task_details_nonce' ) ) {
             return $post_id;
         }
-
-        // Check autosave and revisions
         if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
             return $post_id;
         }
-        if ( wp_is_post_revision( $post_id ) ) {
-            return $post_id;
-        }
-
-        // Check user capabilities
         if ( ! current_user_can( 'edit_task', $post_id ) ) {
             return $post_id;
         }
 
-        // Save Task Details
-        if ( isset( $_POST['workrequest_task_assigned_to'] ) ) {
-            $assigned_to = absint( $_POST['workrequest_task_assigned_to'] );
-            if ( $assigned_to > 0 ) {
-                update_post_meta( $post_id, '_workrequest_task_assigned_to', $assigned_to );
-            } else {
-                delete_post_meta( $post_id, '_workrequest_task_assigned_to' );
-            }
-        }
-
-        if ( isset( $_POST['workrequest_task_cost'] ) ) {
-            update_post_meta( $post_id, '_workrequest_task_cost', floatval( $_POST['workrequest_task_cost'] ) );
-        }
-
-        if ( isset( $_POST['workrequest_task_due_date'] ) ) {
-            update_post_meta( $post_id, '_workrequest_task_due_date', sanitize_text_field( $_POST['workrequest_task_due_date'] ) );
-        }
-
-        if ( isset( $_POST['workrequest_task_priority'] ) ) {
-            $new_priority = sanitize_text_field( $_POST['workrequest_task_priority'] );
-            $allowed_priorities = array( 'low', 'medium', 'high', 'urgent' );
-            if ( in_array( $new_priority, $allowed_priorities, true ) ) { // Use strict comparison
-                update_post_meta( $post_id, '_workrequest_task_priority', $new_priority );
-            }
-        }
-
-        // Save Task Status
         if ( isset( $_POST['workrequest_task_status'] ) ) {
-            $new_status = sanitize_text_field( $_POST['workrequest_task_status'] );
-            $allowed_statuses = array( 'pending', 'assigned', 'in_progress', 'completed', 'on_hold', 'cancelled', 'needs_review' );
-            if ( in_array( $new_status, $allowed_statuses, true ) ) { // Use strict comparison
-                update_post_meta( $post_id, '_workrequest_task_status', $new_status );
-            }
+            update_post_meta( $post_id, '_workrequest_task_status', sanitize_text_field( $_POST['workrequest_task_status'] ) );
         }
-
-        // Save Approvals
-        update_post_meta( $post_id, '_workrequest_task_owner_approved', isset( $_POST['workrequest_task_owner_approved'] ) ? 1 : 0 );
-        update_post_meta( $post_id, '_workrequest_task_storage_approved', isset( $_POST['workrequest_task_storage_approved'] ) ? 1 : 0 );
-        update_post_meta( $post_id, '_workrequest_task_operator_approved', isset( $_POST['workrequest_task_operator_approved'] ) ? 1 : 0 );
-        update_post_meta( $post_id, '_workrequest_task_qc_approved', isset( $_POST['workrequest_task_qc_approved'] ) ? 1 : 0 );
-
-        // Handle linking to a Repair Request/Repair Order Item if coming from a URL parameter
-        // This is typically only set on initial creation from a Request or Item page.
-        if ( isset( $_POST['workrequest_task_original_request_id_from_url'] ) && ! empty( $_POST['workrequest_task_original_request_id_from_url'] ) ) {
-            $request_id = absint( $_POST['workrequest_task_original_request_id_from_url'] );
-            // Only update if current meta is empty or the new request_id is valid
-            if ( empty( get_post_meta( $post_id, '_workrequest_task_original_request_id', true ) ) || get_post_type( $request_id ) === 'repair_request' ) {
-                update_post_meta( $post_id, '_workrequest_task_original_request_id', $request_id );
-            }
+        if ( isset( $_POST['workrequest_assigned_technician_id'] ) ) {
+            update_post_meta( $post_id, '_workrequest_assigned_technician_id', intval( $_POST['workrequest_assigned_technician_id'] ) );
         }
+        if ( isset( $_POST['workrequest_due_date'] ) ) {
+            update_post_meta( $post_id, '_workrequest_due_date', sanitize_text_field( $_POST['workrequest_due_date'] ) );
+        }
+         if ( isset( $_POST['workrequest_related_request_id'] ) ) {
+            update_post_meta( $post_id, '_workrequest_related_request_id', intval( $_POST['workrequest_related_request_id'] ) );
+        }
+    }
 
-        if ( isset( $_POST['workrequest_task_linked_item_id_from_url'] ) && ! empty( $_POST['workrequest_task_linked_item_id_from_url'] ) ) {
-            $item_id = absint( $_POST['workrequest_task_linked_item_id_from_url'] );
-            // Only update if current meta is empty or the new item_id is valid
-            if ( empty( get_post_meta( $post_id, '_workrequest_task_linked_item_id', true ) ) || get_post_type( $item_id ) === 'repair_order_item' ) {
-                update_post_meta( $post_id, '_workrequest_task_linked_item_id', $item_id );
-            }
+    /**
+     * Adds custom columns to the Task list table.
+     *
+     * @param array $columns Existing columns.
+     * @return array Modified columns.
+     */
+    public function add_custom_columns( $columns ) {
+        unset( $columns['date'] );
+        $new_columns = array(
+            'task_status'      => __( 'Status', 'workrequest' ),
+            'assigned_to'      => __( 'Assigned To', 'workrequest' ),
+            'due_date'         => __( 'Due Date', 'workrequest' ),
+            'related_request'  => __( 'Related Request', 'workrequest' ),
+            'date'             => __( 'Date', 'workrequest' ), // Re-add date at the end
+        );
+        return array_merge( $columns, $new_columns );
+    }
+
+    /**
+     * Renders content for custom columns in the Task list table.
+     *
+     * @param string $column_name The name of the column to display.
+     * @param int    $post_id     The ID of the current post.
+     */
+    public function render_custom_columns( $column_name, $post_id ) {
+        switch ( $column_name ) {
+            case 'task_status':
+                $status = get_post_meta( $post_id, '_workrequest_task_status', true );
+                echo esc_html( ucfirst( str_replace( '_', ' ', $status ) ) );
+                break;
+            case 'assigned_to':
+                $technician_id = get_post_meta( $post_id, '_workrequest_assigned_technician_id', true );
+                if ( $technician_id ) {
+                    $user = get_user_by( 'ID', $technician_id );
+                    echo $user ? esc_html( $user->display_name ) : __( 'N/A', 'workrequest' );
+                } else {
+                    echo __( 'Unassigned', 'workrequest' );
+                }
+                break;
+            case 'due_date':
+                $due_date = get_post_meta( $post_id, '_workrequest_due_date', true );
+                echo $due_date ? esc_html( date_i18n( get_option( 'date_format' ), strtotime( $due_date ) ) ) : __( 'N/A', 'workrequest' );
+                break;
+            case 'related_request':
+                $related_request_id = get_post_meta( $post_id, '_workrequest_related_request_id', true );
+                if ( $related_request_id ) {
+                    $request_title = get_the_title( $related_request_id );
+                    $edit_link = get_edit_post_link( $related_request_id );
+                    if ( $request_title && $edit_link ) {
+                        echo '<a href="' . esc_url( $edit_link ) . '">' . esc_html( $request_title ) . '</a>';
+                    } else {
+                        echo __( 'N/A', 'workrequest' );
+                    }
+                } else {
+                    echo __( 'None', 'workrequest' );
+                }
+                break;
         }
     }
 }
