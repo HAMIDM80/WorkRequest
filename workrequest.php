@@ -1,121 +1,98 @@
 <?php
-/*
-Plugin Name: WorkRequest
-Description: A custom plugin for managing repair requests and WooCommerce orders.
-Version: 1.0.0
-Author: seyedhamid
-Text Domain: workrequest
-Domain Path: /languages
-*/
+/**
+ * Plugin Name: Work Request Management
+ * Plugin URI:  https://example.com/workrequest
+ * Description: A plugin to manage repair requests, tasks, and repair order items.
+ * Version:     1.0.3
+ * Author:      Your Name
+ * Author URI:  https://example.com
+ * License:     GPL-2.0+
+ * License URI: http://www.gnu.org/licenses/gpl-2.0.txt
+ * Text Domain: workrequest
+ * Domain Path: /languages
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
 }
 
-// Define plugin constants for easier path management and versioning
+// Define plugin constants
 if ( ! defined( 'WORKREQUEST_PLUGIN_DIR' ) ) {
     define( 'WORKREQUEST_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 }
-if ( ! defined( 'WORKREQUEST_PLUGIN_URL' ) ) {
-    define( 'WORKREQUEST_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-}
-if ( ! defined( 'WORKREQUEST_VERSION' ) ) {
-    define( 'WORKREQUEST_VERSION', '1.0.1' ); // Increment version for cache busting
-}
-
-// Include Custom Post Type for Repair Requests
-require_once WORKREQUEST_PLUGIN_DIR . 'includes/cpt-repair-request.php';
-
-// Include Admin functionalities for Repair Request (Metaboxes, AJAX handlers)
-require_once WORKREQUEST_PLUGIN_DIR . 'includes/admin-repair-request.php';
-
-// Include frontend form file
-require_once WORKREQUEST_PLUGIN_DIR . 'public/form-repair-request.php';
-
-// --- Plugin Core Functions ---
 
 /**
- * Checks if WooCommerce is active and displays an admin notice if it's not.
+ * Autoload classes (optional but recommended for larger projects)
+ * For simplicity in this refactoring, we will manually require.
+ * In a real-world plugin, you'd use Composer for autoloading.
  */
-function workrequest_check_woocommerce_active() {
-    if ( ! class_exists( 'WooCommerce' ) ) {
-        add_action( 'admin_notices', 'workrequest_woocommerce_inactive_notice' );
+// spl_autoload_register( function ( $class_name ) {
+//     $file = WORKREQUEST_PLUGIN_DIR . 'src/' . str_replace( '_', '/', $class_name ) . '.php';
+//     if ( file_exists( $file ) ) {
+//         require_once $file;
+//     }
+// });
+
+/**
+ * Require necessary classes.
+ * Load our core classes.
+ */
+require_once WORKREQUEST_PLUGIN_DIR . 'src/CPT/RepairRequest.php';
+require_once WORKREQUEST_PLUGIN_DIR . 'src/CPT/RepairOrderItem.php';
+require_once WORKREQUEST_PLUGIN_DIR . 'src/CPT/Task.php';
+
+require_once WORKREQUEST_PLUGIN_DIR . 'src/Admin/RepairRequestMetaboxes.php';
+require_once WORKREQUEST_PLUGIN_DIR . 'src/Admin/RepairOrderItemMetaboxes.php';
+require_once WORKREQUEST_PLUGIN_DIR . 'src/Admin/TaskMetaboxes.php';
+
+// You might have a main plugin class that handles instantiation,
+// but for now, we'll instantiate them directly in the main file.
+// In a more complex plugin, you would likely have a central 'WorkRequest' class
+// that initializes all these components.
+
+/**
+ * Plugin activation hook.
+ * Register CPTs and flush rewrite rules.
+ */
+function workrequest_activate_plugin() {
+    // Instantiate CPT classes on activation to ensure registration occurs
+    // so rewrite rules can be flushed correctly.
+    new WorkRequest_CPT_RepairRequest();
+    new WorkRequest_CPT_RepairOrderItem();
+    new WorkRequest_CPT_Task();
+
+    // Flush rewrite rules after CPTs are registered
+    flush_rewrite_rules();
+}
+register_activation_hook( __FILE__, 'workrequest_activate_plugin' );
+
+/**
+ * Plugin deactivation hook.
+ */
+function workrequest_deactivate_plugin() {
+    flush_rewrite_rules();
+}
+register_deactivation_hook( __FILE__, 'workrequest_deactivate_plugin' );
+
+
+/**
+ * Initialize all plugin classes.
+ * This function will be called on WordPress 'plugins_loaded' hook.
+ */
+function workrequest_initialize_plugin() {
+    // Instantiate CPT classes
+    new WorkRequest_CPT_RepairRequest();
+    new WorkRequest_CPT_RepairOrderItem();
+    new WorkRequest_CPT_Task();
+
+    // Instantiate Admin Metaboxes classes
+    if ( is_admin() ) {
+        new WorkRequest_Admin_RepairRequestMetaboxes();
+        new WorkRequest_Admin_RepairOrderItemMetaboxes();
+        new WorkRequest_Admin_TaskMetaboxes();
     }
+
+    // Add other initializations here as your plugin grows
+    // For example, frontend forms, settings pages, etc.
 }
-add_action( 'admin_init', 'workrequest_check_woocommerce_active' );
-
-/**
- * Displays the WooCommerce inactive notice.
- */
-function workrequest_woocommerce_inactive_notice() {
-    ?>
-    <div class="notice notice-error is-dismissible">
-        <p><strong><?php esc_html_e( 'WorkRequest requires WooCommerce to be active!', 'workrequest' ); ?></strong> <?php esc_html_e( 'Please install and activate WooCommerce.', 'workrequest' ); ?></p>
-    </div>
-    <?php
-}
-
-/**
- * Enqueues admin scripts and styles specifically for the 'repair_request' post type edit screen.
- * This function is defined ONLY once in this file to avoid redeclaration errors.
- */
-function workrequest_enqueue_admin_scripts( $hook ) {
-    global $pagenow; // Get the current admin page filename
-
-    // Check if we are on the 'post.php' (edit post) or 'post-new.php' (new post) screen
-    // AND if the current post type (for editing) or requested post type (for new) is 'repair_request'.
-    if ( ( 'post.php' === $pagenow || 'post-new.php' === $pagenow ) ) {
-        // Get the post type; for 'post-new.php', it might be in $_GET, for 'post.php', it's $post->post_type
-        $current_post_type = '';
-        if ( 'post.php' === $pagenow && isset( $_GET['post'] ) ) {
-            $post = get_post( (int) $_GET['post'] );
-            if ( $post ) {
-                $current_post_type = $post->post_type;
-            }
-        } elseif ( 'post-new.php' === $pagenow && isset( $_GET['post_type'] ) ) {
-            $current_post_type = sanitize_text_field( $_GET['post_type'] );
-        }
-
-        if ( 'repair_request' === $current_post_type ) {
-            // Enqueue WooCommerce's enhanced select script (selectWoo) and its styles
-            // These are crucial for the product search autocomplete functionality
-            wp_enqueue_script( 'selectWoo' ); // selectWoo.full.js
-            wp_enqueue_script( 'wc-enhanced-select' ); // Wraps selectWoo with WC-specific enhancements
-            wp_enqueue_style( 'woocommerce_admin_styles' ); // For WC admin styles
-
-            // Enqueue our custom admin metabox script
-            wp_enqueue_script(
-                'workrequest-admin-metabox', // Script handle
-                WORKREQUEST_PLUGIN_URL . 'assets/js/admin-metabox.js', // Correct path relative to plugin base
-                array( 'jquery', 'selectWoo', 'wc-enhanced-select' ), // Dependencies
-                WORKREQUEST_VERSION, // Version for cache busting
-                true // Load in footer
-            );
-
-            // Localize script for passing PHP variables to JavaScript
-            wp_localize_script(
-                'workrequest-admin-metabox', // Script handle to attach data to
-                'WorkRequestAdmin', // JavaScript object name
-                array(
-                    'ajax_url'                   => admin_url( 'admin-ajax.php' ),
-                    'search_products_nonce'      => wp_create_nonce( 'search-products' ), // Nonce for product search
-                    'create_order_nonce'         => wp_create_nonce( 'workrequest_create_order_nonce' ), // Nonce for order creation
-                    'post_id'                    => isset( $post ) ? $post->ID : 0, // Current post ID, or 0 for new posts
-                    'search_placeholder_text'    => __( 'Search for a product...', 'workrequest' ),
-                    'no_products_selected_text'  => __( 'Please select at least one product to create an order.', 'workrequest' ),
-                    'order_success_text'         => __( 'Order created successfully! Order #%s.', 'workrequest' ),
-                    'order_error_text'           => __( 'Error creating order:', 'workrequest' ),
-                    'order_ajax_error_text'      => __( 'AJAX error during order creation:', 'workrequest' ),
-                    'order_converted_text'       => __( 'This request has been converted to a WooCommerce order.', 'workrequest' ),
-                    'order_number_text'          => __( 'Order Number', 'workrequest' ),
-                    'order_status_text'          => __( 'Order Status', 'workrequest' ),
-                    'order_total_text'           => __( 'Order Total', 'workrequest' ),
-                    'edit_order_url'             => admin_url( 'post.php?post=%d&action=edit' ), // URL template to edit the created order
-                    'order_edit_note'            => __( 'To edit the order details, please go to the WooCommerce order page.', 'workrequest' ),
-                )
-            );
-        }
-    }
-}
-// Hook our enqueue function to the admin_enqueue_scripts action
-add_action( 'admin_enqueue_scripts', 'workrequest_enqueue_admin_scripts' );
+add_action( 'plugins_loaded', 'workrequest_initialize_plugin' );
