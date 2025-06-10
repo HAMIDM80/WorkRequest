@@ -1,0 +1,47 @@
+/* assets/css/admin-style.css */
+
+.workrequest-products-for-order .products-sub-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.workrequest-products-for-order .products-sub-table th,
+.workrequest-products-for-order .products-sub-table td {
+    border: 1px solid #e0e0e0;
+    padding: 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.workrequest-products-for-order .products-sub-table th {
+    background-color: #f7f7f7;
+}
+
+.workrequest-products-for-order .products-sub-table input[type="number"],
+.workrequest-products-for-order .products-sub-table input[type="text"] {
+    width: 100px; /* Adjust as needed */
+    box-sizing: border-box;
+}
+
+.workrequest-products-for-order .products-sub-table input[type="text"] {
+    width: 98%; /* Larger width for notes */
+}
+
+.workrequest-order-status-display {
+    margin-top: 10px;
+    padding: 5px;
+    border: 1px solid #eee;
+    background-color: #f9f9f9;
+    display: none; /* Hidden by default, shown on AJAX response */
+}
+
+.workrequest-order-status-display .spinner {
+    vertical-align: middle;
+    float: none;
+    margin: 0 5px;
+}
+
+.dashicons {
+    vertical-align: middle;
+}

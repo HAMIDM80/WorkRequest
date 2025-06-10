@@ -10,11 +10,30 @@ class WorkRequest_Admin_RepairRequestMetaboxes {
     public function __construct() {
         add_action( 'add_meta_boxes', array( $this, 'add_repair_request_metaboxes' ) );
         add_action( 'save_post_repair_request', array( $this, 'save_repair_request_metabox_data' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 
         // --- START: Custom Columns for Repair Request ---
         add_filter( 'manage_repair_request_posts_columns', array( $this, 'add_custom_columns' ) );
         add_action( 'manage_repair_request_posts_custom_column', array( $this, 'render_custom_columns' ), 10, 2 );
         // --- END: Custom Columns for Repair Request ---
+    }
+
+    public function enqueue_scripts( $hook ) {
+        global $post_type;
+        if ( 'post-new.php' == $hook || 'post.php' == $hook ) {
+            if ( 'repair_request' == $post_type ) {
+                // Enqueue select2 for product search dropdown
+                wp_enqueue_style( 'select2', 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css', array(), '4.1.0-rc.0' );
+                wp_enqueue_script( 'select2', 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js', array( 'jquery' ), '4.1.0-rc.0', true );
+
+                // Custom script for product selection and AJAX
+                wp_enqueue_script( 'workrequest-repair-request-admin', WORKREQUEST_PLUGIN_URL . 'assets/js/repair-request-admin.js', array( 'jquery', 'select2' ), WORKREQUEST_PLUGIN_VERSION, true );
+                wp_localize_script( 'workrequest-repair-request-admin', 'workrequest_ajax_object', array(
+                    'ajax_url' => admin_url( 'admin-ajax.php' ),
+                    'security' => wp_create_nonce( 'workrequest_product_search_nonce' ),
+                ) );
+            }
+        }
     }
 
     public function add_repair_request_metaboxes() {
@@ -26,7 +45,24 @@ class WorkRequest_Admin_RepairRequestMetaboxes {
             'normal',
             'high'
         );
-        // Add more metaboxes as needed for RepairRequest
+
+        add_meta_box(
+            'workrequest_repair_products',
+            __( 'Required Products', 'workrequest' ),
+            array( $this, 'render_repair_products_metabox' ),
+            'repair_request',
+            'normal',
+            'high'
+        );
+
+        add_meta_box(
+            'workrequest_operator_notes',
+            __( 'Operator Notes / Tasks Definition', 'workrequest' ),
+            array( $this, 'render_operator_notes_metabox' ),
+            'repair_request',
+            'normal',
+            'high'
+        );
     }
 
     public function render_repair_request_details_metabox( $post ) {
@@ -98,6 +134,148 @@ class WorkRequest_Admin_RepairRequestMetaboxes {
         <?php
     }
 
+    public function render_repair_products_metabox( $post ) {
+        // Nonce field for security
+        wp_nonce_field( 'repair_products_nonce', 'repair_products_nonce_field' );
+
+        // Get previously selected products
+        $selected_products_data = get_post_meta( $post->ID, '_workrequest_selected_products', true );
+        if ( ! is_array( $selected_products_data ) ) {
+            $selected_products_data = array();
+        }
+        ?>
+        <div id="workrequest-products-wrapper">
+            <p>
+                <label for="workrequest_product_search"><?php _e( 'Search and add products:', 'workrequest' ); ?></label>
+                <select class="wc-product-search" id="workrequest_product_search" style="width: 100%;"></select>
+            </p>
+
+            <table class="wp-list-table widefat fixed striped products-table">
+                <thead>
+                    <tr>
+                        <th><?php _e( 'Product', 'workrequest' ); ?></th>
+                        <th><?php _e( 'Quantity', 'workrequest' ); ?></th>
+                        <th><?php _e( 'Note', 'workrequest' ); ?></th>
+                        <th><?php _e( 'Actions', 'workrequest' ); ?></th>
+                    </tr>
+                </thead>
+                <tbody id="workrequest-selected-products-list">
+                    <?php if ( empty( $selected_products_data ) ) : ?>
+                        <tr class="no-products-row">
+                            <td colspan="4"><?php _e( 'No products added yet.', 'workrequest' ); ?></td>
+                        </tr>
+                    <?php else : ?>
+                        <?php foreach ( $selected_products_data as $product_id => $data ) :
+                            $product = wc_get_product( $product_id );
+                            if ( ! $product ) continue;
+                            $quantity = isset( $data['quantity'] ) ? absint( $data['quantity'] ) : 1;
+                            $note = isset( $data['note'] ) ? esc_textarea( $data['note'] ) : '';
+                            ?>
+                            <tr data-product_id="<?php echo esc_attr( $product_id ); ?>">
+                                <td><?php echo esc_html( $product->get_name() ); ?></td>
+                                <td><input type="number" name="workrequest_products[<?php echo esc_attr( $product_id ); ?>][quantity]" value="<?php echo esc_attr( $quantity ); ?>" min="1" step="1" class="small-text workrequest-product-qty" /></td>
+                                <td><input type="text" name="workrequest_products[<?php echo esc_attr( $product_id ); ?>][note]" value="<?php echo esc_attr( $note ); ?>" class="large-text" placeholder="<?php esc_attr_e( 'Add note (optional)', 'workrequest' ); ?>" /></td>
+                                <td><button type="button" class="button button-small remove-product-row"><?php _e( 'Remove', 'workrequest' ); ?></button></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <style>
+            .products-table td { vertical-align: middle; }
+            .products-table input[type="number"] { width: 70px; }
+            .products-table input[type="text"] { width: 95%; }
+            .select2-container { margin-top: 5px; }
+            .select2-container--default .select2-selection--single {
+                height: 30px;
+                padding-top: 2px;
+                border-color: #c3c4c7;
+            }
+        </style>
+        <script>
+            jQuery(document).ready(function($) {
+                // Initialize Select2 for product search
+                $('.wc-product-search').select2({
+                    ajax: {
+                        url: workrequest_ajax_object.ajax_url,
+                        dataType: 'json',
+                        delay: 250,
+                        data: function (params) {
+                            return {
+                                q: params.term, // search term
+                                action: 'workrequest_search_products',
+                                security: workrequest_ajax_object.security
+                            };
+                        },
+                        processResults: function (data) {
+                            return {
+                                results: data
+                            };
+                        },
+                        cache: true
+                    },
+                    minimumInputLength: 3,
+                    placeholder: '<?php esc_attr_e( 'Search for a product...', 'workrequest' ); ?>',
+                    allowClear: true
+                });
+
+                // Add product to the list when selected
+                $('#workrequest_product_search').on('select2:select', function (e) {
+                    var product_id = e.params.data.id;
+                    var product_name = e.params.data.text;
+                    var $productsList = $('#workrequest-selected-products-list');
+
+                    // Check if product already exists
+                    if ($productsList.find('tr[data-product_id="' + product_id + '"]').length > 0) {
+                        alert('<?php esc_attr_e( 'This product is already added.', 'workrequest' ); ?>');
+                        return;
+                    }
+
+                    // Remove "No products added yet." row if it exists
+                    $productsList.find('.no-products-row').remove();
+
+                    // Append new product row
+                    var newRow = `
+                        <tr data-product_id="${product_id}">
+                            <td>${product_name}</td>
+                            <td><input type="number" name="workrequest_products[${product_id}][quantity]" value="1" min="1" step="1" class="small-text workrequest-product-qty" /></td>
+                            <td><input type="text" name="workrequest_products[${product_id}][note]" value="" class="large-text" placeholder="<?php esc_attr_e( 'Add note (optional)', 'workrequest' ); ?>" /></td>
+                            <td><button type="button" class="button button-small remove-product-row"><?php _e( 'Remove', 'workrequest' ); ?></button></td>
+                        </tr>
+                    `;
+                    $productsList.append(newRow);
+
+                    // Clear the select2 field after selection
+                    $(this).val(null).trigger('change');
+                });
+
+                // Remove product row
+                $('#workrequest-selected-products-list').on('click', '.remove-product-row', function() {
+                    $(this).closest('tr').remove();
+                    if ($('#workrequest-selected-products-list').find('tr').length === 0) {
+                        $('#workrequest-selected-products-list').append('<tr class="no-products-row"><td colspan="4"><?php _e( 'No products added yet.', 'workrequest' ); ?></td></tr>');
+                    }
+                });
+            });
+        </script>
+        <?php
+    }
+
+    public function render_operator_notes_metabox( $post ) {
+        // Nonce field for security
+        wp_nonce_field( 'operator_notes_nonce', 'operator_notes_nonce_field' );
+
+        $operator_notes = get_post_meta( $post->ID, '_workrequest_operator_notes', true );
+        ?>
+        <p>
+            <label for="workrequest_operator_notes"><?php _e( 'Enter tasks for this repair, one task per line:', 'workrequest' ); ?></label>
+            <textarea id="workrequest_operator_notes" name="workrequest_operator_notes" rows="10" class="large-text" placeholder="<?php esc_attr_e( 'e.g.,\nCheck circuit board for damage\nReplace faulty capacitor\nTest device functionality', 'workrequest' ); ?>"><?php echo esc_textarea( $operator_notes ); ?></textarea>
+        </p>
+        <p class="description"><?php _e( 'Each line will be considered a separate task when "Create Tasks" button is used on the Tasks by Request page.', 'workrequest' ); ?></p>
+        <?php
+    }
+
     public function save_repair_request_metabox_data( $post_id ) {
         // Check if our nonce is set.
         if ( ! isset( $_POST['repair_request_details_nonce_field'] ) ) {
@@ -119,7 +297,7 @@ class WorkRequest_Admin_RepairRequestMetaboxes {
             return $post_id;
         }
 
-        // Sanitize and save the data
+        // Sanitize and save the data for general details
         if ( isset( $_POST['workrequest_status'] ) ) {
             update_post_meta( $post_id, '_workrequest_status', sanitize_text_field( $_POST['workrequest_status'] ) );
         }
@@ -137,6 +315,25 @@ class WorkRequest_Admin_RepairRequestMetaboxes {
         }
         if ( isset( $_POST['workrequest_assigned_technician_id'] ) ) {
             update_post_meta( $post_id, '_workrequest_assigned_technician_id', intval( $_POST['workrequest_assigned_technician_id'] ) );
+        }
+
+        // Save selected products
+        if ( isset( $_POST['workrequest_products'] ) && is_array( $_POST['workrequest_products'] ) ) {
+            $sanitized_products = array();
+            foreach ( $_POST['workrequest_products'] as $product_id => $data ) {
+                $sanitized_products[absint( $product_id )] = array(
+                    'quantity' => isset( $data['quantity'] ) ? absint( $data['quantity'] ) : 1,
+                    'note'     => isset( $data['note'] ) ? sanitize_textarea_field( $data['note'] ) : '',
+                );
+            }
+            update_post_meta( $post_id, '_workrequest_selected_products', $sanitized_products );
+        } else {
+            delete_post_meta( $post_id, '_workrequest_selected_products' ); // Remove if no products are selected
+        }
+
+        // Save operator notes
+        if ( isset( $_POST['workrequest_operator_notes'] ) ) {
+            update_post_meta( $post_id, '_workrequest_operator_notes', sanitize_textarea_field( $_POST['workrequest_operator_notes'] ) );
         }
     }
 
@@ -156,6 +353,7 @@ class WorkRequest_Admin_RepairRequestMetaboxes {
             'status'        => __( 'Status', 'workrequest' ),
             'priority'      => __( 'Priority', 'workrequest' ),
             'technician'    => __( 'Technician', 'workrequest' ),
+            'products_count' => __( 'Products', 'workrequest' ), // New column for product count
             'date'          => __( 'Date', 'workrequest' ), // Re-add date at the end if desired
         );
         return array_merge( $columns, $new_columns );
@@ -188,6 +386,10 @@ class WorkRequest_Admin_RepairRequestMetaboxes {
                 } else {
                     echo __( 'Unassigned', 'workrequest' );
                 }
+                break;
+            case 'products_count':
+                $products = get_post_meta( $post_id, '_workrequest_selected_products', true );
+                echo count( is_array( $products ) ? $products : array() );
                 break;
             // 'date' column will be handled by WordPress default if added by merge,
             // or you can implement custom date formatting here.

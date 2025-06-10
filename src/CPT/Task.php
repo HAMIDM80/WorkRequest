@@ -15,18 +15,14 @@ class WorkRequest_CPT_Task {
      * Hooks into WordPress to register the CPT and manage its messages.
      */
     public function __construct() {
-        error_log( 'WorkRequest_CPT_Task constructor called.' ); // Add this line for debugging
         add_action( 'init', array( $this, 'register_cpt' ) );
         add_filter( 'post_updated_messages', array( $this, 'updated_messages' ) );
-        // Note: Custom columns and filters are handled in a separate Admin class (TaskListTable or similar)
-        // because they relate to the admin list table UI, not the CPT definition itself.
     }
 
     /**
      * Register the 'task' Custom Post Type.
      */
     public function register_cpt() {
-        error_log( 'WorkRequest_CPT_Task register_cpt method called.' ); // Add this line for debugging
         $labels = array(
             'name'                  => _x( 'Tasks', 'Post Type General Name', 'workrequest' ),
             'singular_name'         => _x( 'Task', 'Post Type Singular Name', 'workrequest' ),
@@ -60,12 +56,11 @@ class WorkRequest_CPT_Task {
             'label'                 => __( 'Task', 'workrequest' ),
             'description'           => __( 'Individual tasks associated with repair items.', 'workrequest' ),
             'labels'                => $labels,
-            'supports'              => array( 'title', 'editor', 'author' ),
+            'supports'              => array( 'title', 'editor', 'author', 'custom-fields' ), // Added custom-fields
             'hierarchical'          => false,
-            'public'                => true, // Changed to true to make it publicly queryable (if needed)
+            'public'                => true,
             'show_ui'               => true,
-            'show_in_menu'          => true, // **Changed to true to display in the main admin menu.**
-                                            // If you plan to register this as a submenu, change back to false and use add_submenu_page().
+            'show_in_menu'          => true, // Display in the main admin menu
             'menu_position'         => 30,
             'menu_icon'             => 'dashicons-list-view',
             'show_in_admin_bar'     => true,
@@ -73,8 +68,8 @@ class WorkRequest_CPT_Task {
             'can_export'            => true,
             'has_archive'           => false,
             'exclude_from_search'   => true,
-            'publicly_queryable'    => true, // Changed to true to align with public
-            'capability_type'       => 'post',
+            'publicly_queryable'    => true,
+            'capability_type'       => 'post', // Consider 'task' for more granular capabilities
             'rewrite'               => false,
             'map_meta_cap'          => true,
             'capabilities'          => array(
@@ -85,7 +80,7 @@ class WorkRequest_CPT_Task {
                 'edit_others_posts'  => 'edit_others_tasks',
                 'publish_posts'      => 'publish_tasks',
                 'read_private_posts' => 'read_private_tasks',
-                'create_posts'       => 'create_tasks',
+                'create_posts'       => 'edit_tasks', // Users who can edit tasks can create them
             ),
         );
         register_post_type( 'task', $args );
@@ -118,7 +113,12 @@ class WorkRequest_CPT_Task {
         return $messages;
     }
 
-    // Helper function for status label (will be moved to a utility class or made static if widely used)
+    /**
+     * Helper function to get task status label.
+     *
+     * @param string $status_slug The status slug (e.g., 'pending', 'completed').
+     * @return string The human-readable status label.
+     */
     public static function get_task_status_label( $status_slug ) {
         $statuses = array(
             'pending'      => __( 'Pending', 'workrequest' ),
