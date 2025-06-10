@@ -1,0 +1,132 @@
+/* Styling for the Work Request Tasks by Request page */
+
+.workrequest-task-approvals .column-id {
+    width: 80px;
+}
+
+.workrequest-task-approvals .column-assignee {
+    width: 150px;
+}
+
+.workrequest-task-approvals .column-status {
+    width: 120px;
+}
+
+.workrequest-task-approvals .column-approval {
+    width: 100px; /* Adjust as needed for approval columns */
+    text-align: center;
+}
+
+/* Style for the custom checkbox labels */
+.workrequest-checkbox-label {
+    display: inline-flex; /* Use flexbox to align checkbox and text/message */
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+    padding-left: 25px; /* Space for custom indicator */
+    min-width: 80px; /* Ensure enough space for status message */
+    justify-content: center; /* Center content in the cell */
+}
+
+.workrequest-checkbox-label input[type="checkbox"] {
+    position: absolute;
+    opacity: 0; /* Hide the default checkbox */
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+/* Custom checkbox indicator (circle for unchecked, green check for checked) */
+.workrequest-checkbox-label .checkbox-indicator {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    height: 18px;
+    width: 18px;
+    background-color: #eee;
+    border: 1px solid #ccc;
+    border-radius: 50%; /* Make it circular */
+    transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+/* When the checkbox is checked, style the indicator */
+.workrequest-checkbox-label input[type="checkbox"]:checked ~ .checkbox-indicator {
+    background-color: #4CAF50; /* Green */
+    border-color: #4CAF50;
+}
+
+/* Create the checkmark (only visible when checked) */
+.workrequest-checkbox-label .checkbox-indicator:after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 6px;
+    top: 2px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* Show the checkmark when checked */
+.workrequest-checkbox-label input[type="checkbox"]:checked ~ .checkbox-indicator:after {
+    display: block;
+}
+
+/* Hover state */
+.workrequest-checkbox-label input[type="checkbox"]:not(:disabled) ~ .checkbox-indicator:hover {
+    background-color: #ddd;
+}
+
+.workrequest-checkbox-label input[type="checkbox"]:checked:not(:disabled) ~ .checkbox-indicator:hover {
+    background-color: #45a049;
+}
+
+/* Disabled state */
+.workrequest-checkbox-label input[type="checkbox"]:disabled ~ .checkbox-indicator {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Status message for AJAX feedback */
+.workrequest-checkbox-label .status-message {
+    margin-left: 5px; /* Space between checkbox and message */
+    font-size: 0.8em;
+    font-weight: bold;
+    min-width: 60px; /* Ensure enough space for message */
+    text-align: left;
+}
+
+/* Styling for the loading state */
+.workrequest-checkbox-label .status-message.loading {
+    color: #0073aa; /* WordPress blue */
+}
+
+/* Styling for the success state */
+.workrequest-checkbox-label .status-message.success {
+    color: #4CAF50; /* Green */
+}
+
+/* Styling for the error state */
+.workrequest-checkbox-label .status-message.error {
+    color: #dc3232; /* Red */
+}
+
+
+/* Styling for the overall table of requests */
+.wp-list-table .column-primary a {
+    text-decoration: none;
+}
+
+/* Styling for custom actions buttons */
+.workrequest-admin-actions {
+    display: flex;
+    gap: 8px;
+}
+.workrequest-admin-actions .button {
+    height: auto;
+    line-height: normal;
+    padding: 6px 12px;
+}

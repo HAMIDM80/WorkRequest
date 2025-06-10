@@ -1,0 +1,47 @@
+/* assets/css/admin-order-item.css */
+.workrequest-order-item-products {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #c3c4c7;
+}
+.workrequest-order-item-products th,
+.workrequest-order-item-products td {
+    padding: 8px 10px;
+    vertical-align: middle;
+}
+.workrequest-order-item-products thead th {
+    background-color: #f7f7f7;
+}
+.workrequest-order-item-products input[type="number"] {
+    width: 60px;
+    text-align: center;
+}
+.workrequest-order-item-products input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+.workrequest-order-status-display {
+    background-color: #e0f2f7; /* Light blue background */
+    padding: 15px;
+    border: 1px solid #a7d9ed;
+    margin-top: 20px;
+    border-radius: 5px;
+}
+.workrequest-order-status-display h3 {
+    margin-top: 0;
+    padding-top: 0;
+    font-size: 1.2em;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 5px;
+}
+.workrequest-order-status-display p {
+    margin-bottom: 5px;
+}
+.workrequest-associated-items {
+    list-style-type: disc;
+    margin-left: 20px;
+    margin-top: 10px;
+}
+.workrequest-associated-items li {
+    margin-bottom: 5px;
+}

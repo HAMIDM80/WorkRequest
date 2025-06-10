@@ -1,0 +1,133 @@
+/* Styling for frontend repair request form and list */
+
+.workrequest-form-wrapper,
+.workrequest-user-requests-wrapper {
+    background-color: #fff;
+    padding: 20px;
+    border: 1px solid #e5e5e5;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.workrequest-form-wrapper h2,
+.workrequest-user-requests-wrapper h2 {
+    font-size: 1.8em;
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.workrequest-form-wrapper .form-field {
+    margin-bottom: 15px;
+}
+
+.workrequest-form-wrapper label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
+
+.workrequest-form-wrapper input[type="text"],
+.workrequest-form-wrapper textarea,
+.workrequest-form-wrapper input[type="email"],
+.workrequest-form-wrapper input[type="tel"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box; /* Include padding in width */
+}
+
+.workrequest-form-wrapper textarea {
+    resize: vertical; /* Allow vertical resizing */
+}
+
+.workrequest-form-wrapper input[type="radio"] {
+    margin-right: 5px;
+}
+
+.workrequest-form-wrapper .required {
+    color: red;
+    margin-left: 2px;
+}
+
+.workrequest-form-wrapper .button {
+    background-color: #0073aa;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+.workrequest-form-wrapper .button:hover {
+    background-color: #005177;
+}
+
+/* Messages (success, error, info) */
+.workrequest-message {
+    padding: 10px 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    border: 1px solid;
+}
+.workrequest-message.notice-success {
+    background-color: #e5ffe5;
+    border-color: #4CAF50;
+    color: #388e3c;
+}
+.workrequest-message.notice-error {
+    background-color: #ffe5e5;
+    border-color: #dc3232;
+    color: #c0392b;
+}
+.workrequest-message.notice-info {
+    background-color: #e5f7ff;
+    border-color: #0073aa;
+    color: #005177;
+}
+.workrequest-message p {
+    margin: 0;
+}
+
+
+/* User Requests Table */
+.workrequest-requests-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.workrequest-requests-table th,
+.workrequest-requests-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+}
+
+.workrequest-requests-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+    color: #333;
+}
+
+.workrequest-requests-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.workrequest-requests-table .button {
+    font-size: 0.9em;
+    padding: 5px 10px;
+    line-height: 1;
+}
+
+/* Basic styling for WooCommerce login form if displayed */
+.woocommerce-form-login {
+    background-color: #f9f9f9;
+    border: 1px solid #eee;
+    padding: 20px;
+    border-radius: 5px;
+}
